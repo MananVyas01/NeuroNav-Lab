@@ -36,6 +36,9 @@ class Evolution:
         # Best network across all generations
         self.best_network_ever: Optional[NeuralNetwork] = None
         self.best_fitness_ever: float = float('-inf')
+        
+        # Adaptive mutation state
+        self.plateau_boost_active: bool = False
     
     def create_initial_population(self) -> List[NeuralNetwork]:
         """
@@ -66,11 +69,22 @@ class Evolution:
         """
         self.generation += 1
         
+        # Mutation-strength annealing: decay over generations, floor at minimum
+        effective_strength = max(
+            config.MUTATION_STRENGTH_MIN,
+            config.MUTATION_STRENGTH * (config.MUTATION_STRENGTH_DECAY ** self.generation)
+        )
+        
+        # Plateau-adaptive boost: temporarily increase mutation
+        if self.plateau_boost_active:
+            effective_strength = min(config.MUTATION_STRENGTH,
+                                     effective_strength * 1.5)
+        
         # Pair networks with their fitness
         population = list(zip(networks, fitnesses))
         population.sort(key=lambda x: x[1], reverse=True)
         
-        # Update best ever
+        # Always update best ever (unconditionally)
         if population[0][1] > self.best_fitness_ever:
             self.best_fitness_ever = population[0][1]
             self.best_network_ever = population[0][0].copy()
@@ -78,6 +92,10 @@ class Evolution:
         # Number of elite networks to keep unchanged
         num_elite = max(1, int(self.population_size * config.ELITE_PERCENTAGE))
         elite = [net.copy() for net, _ in population[:num_elite]]
+        
+        # Hall-of-fame: always inject best-ever as first elite (untouched)
+        if self.best_network_ever is not None:
+            elite.insert(0, self.best_network_ever.copy())
         
         # Create new generation
         new_networks: List[NeuralNetwork] = []
@@ -89,7 +107,7 @@ class Evolution:
         tournament_size = 5
         
         while len(new_networks) < self.population_size:
-            if random.random() < config.CROSSOVER_RATE:
+            if config.ENABLE_CROSSOVER and random.random() < config.CROSSOVER_RATE:
                 # Crossover between two tournament winners
                 parent1 = self._tournament_select(population, tournament_size)
                 parent2 = self._tournament_select(population, tournament_size)
@@ -100,7 +118,7 @@ class Evolution:
                 child = parent.copy()
             
             # Mutate the child
-            child.mutate(config.MUTATION_RATE, config.MUTATION_STRENGTH)
+            child.mutate(config.MUTATION_RATE, effective_strength)
             
             new_networks.append(child)
         
@@ -165,3 +183,7 @@ class Evolution:
         population = list(zip(networks, fitnesses))
         population.sort(key=lambda x: x[1], reverse=True)
         return [net for net, _ in population[:n]]
+    
+    def set_plateau_boost(self, active: bool) -> None:
+        """Enable or disable plateau-adaptive mutation boost."""
+        self.plateau_boost_active = active

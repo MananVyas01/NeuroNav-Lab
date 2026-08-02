@@ -88,6 +88,10 @@ class Simulation:
         # --- NEW: Training reset tracking ---
         self.total_generations_completed: int = 0
         
+        # --- NEW: Generation extension tracking ---
+        self.fitness_before_stagnation: float = 0.0
+        self.frames_of_stagnation: int = 0
+        
         self._init_population()
     
     def _init_population(self) -> None:
@@ -141,6 +145,19 @@ class Simulation:
             self._check_early_termination()
             
             self.frame += 1
+            
+            # --- Generation extension check (per-frame) ---
+            if (config.ALLOW_GENERATION_EXTENSION
+                    and not self.generation_extended
+                    and self.frame >= self.current_generation_length - 50
+                    and self._check_extension_qualification()):
+                best_now = max((r.fitness for r in self.rockets), default=0)
+                if best_now > self.fitness_before_stagnation:
+                    bonus = min(config.GENERATION_LENGTH_MAX - self.current_generation_length, 250)
+                    if bonus > 0:
+                        self.current_generation_length += bonus
+                        self.generation_extended = True
+                        print(f"[GEN {self.evolution.generation}] Extended +{bonus} → {self.current_generation_length}")
         
         self._update_trails()
         self._update_selected_rocket()
@@ -231,9 +248,13 @@ class Simulation:
     
     def _next_generation(self) -> None:
         """Evolve to the next generation."""
+        # Capture the generation length that was active during this generation
+        # (before _update_generation_length recalculates it for the next one)
+        active_generation_length = self.current_generation_length
+        
         fitnesses = []
         for rocket in self.rockets:
-            rocket.calculate_fitness()
+            rocket.calculate_fitness(active_generation_length)
             fitnesses.append(rocket.fitness)
         
         num_reached = sum(1 for r in self.rockets if r.reached_target)
@@ -247,10 +268,13 @@ class Simulation:
         avg_fitness = sum(fitnesses) / len(fitnesses) if fitnesses else 0
         success_rate = num_reached / config.POPULATION_SIZE * 100
         
-        if success_rate > self.all_time_best_success_rate:
-            self.all_time_best_success_rate = success_rate
+        # Update all-time best whenever fitness improves (not just success rate)
+        if best_fitness > self.all_time_best_fitness:
             self.all_time_best_fitness = best_fitness
             self.all_time_best_generation = self.evolution.generation
+        
+        if success_rate > self.all_time_best_success_rate:
+            self.all_time_best_success_rate = success_rate
             best_rocket = max(
                 [r for r in self.rockets if r.reached_target],
                 key=lambda r: r.fitness,
@@ -302,6 +326,7 @@ class Simulation:
         self._update_training_phase()
         self._update_trend()
         self._update_plateau_detection()
+        self.evolution.set_plateau_boost(self.plateau_detected)
         
         self.last_generation_summary = {
             "generation": self.evolution.generation,
@@ -332,6 +357,8 @@ class Simulation:
         self.best_trail = []
         self.frame = 0
         self.total_generations_completed += 1
+        self.generation_extended = False
+        self.fitness_before_stagnation = best_fitness
         
         self._update_generation_length()
         
@@ -357,16 +384,6 @@ class Simulation:
             self.current_generation_length = config.MID_GENERATION_LENGTH
         else:
             self.current_generation_length = config.LATE_GENERATION_LENGTH
-        
-        if self.frame >= self.current_generation_length - 50:
-            if self._check_extension_qualification():
-                self.current_generation_length = min(
-                    self.current_generation_length + config.MAX_EXTENSION_LENGTH,
-                    config.EARLY_GENERATION_LENGTH + config.MAX_EXTENSION_LENGTH
-                )
-                self.generation_extended = True
-            else:
-                self.generation_extended = False
     
     def _update_trend(self) -> None:
         """Update trend indicators based on recent history."""
@@ -407,7 +424,11 @@ class Simulation:
         
         improvement = best_second - best_first
         
-        if improvement < config.PLATEAU_MIN_IMPROVEMENT:
+        baseline = abs(best_first) if best_first != 0 else 1.0
+        relative_improvement = improvement / baseline
+        
+        if (improvement < config.PLATEAU_MIN_IMPROVEMENT
+                and relative_improvement < config.PLATEAU_MIN_IMPROVEMENT_RATIO):
             if not self.plateau_detected:
                 self.plateau_detected = True
                 self.plateau_start_gen = self.evolution.generation

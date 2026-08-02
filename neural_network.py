@@ -24,14 +24,21 @@ class NeuralNetwork:
         self.layer_sizes = layer_sizes
         self.num_layers = len(layer_sizes)
         
-        # Xavier/Glorot initialization for better gradient flow
+        # He initialization for hidden layers, small init for output
         self.weights: List[np.ndarray] = []
         self.biases: List[np.ndarray] = []
         
         for i in range(self.num_layers - 1):
-            scale = np.sqrt(2.0 / layer_sizes[i])
-            w = np.random.randn(layer_sizes[i], layer_sizes[i + 1]) * scale
-            b = np.zeros((1, layer_sizes[i + 1]))
+            if i == self.num_layers - 2:
+                # Output layer: small weights to avoid tanh saturation at init
+                scale = 0.15
+                w = np.random.randn(layer_sizes[i], layer_sizes[i + 1]) * scale
+                b = np.zeros((1, layer_sizes[i + 1]))
+                b[0, 1] = 0.85  # bias thrust output so rockets move from gen 1
+            else:
+                scale = np.sqrt(2.0 / layer_sizes[i])
+                w = np.random.randn(layer_sizes[i], layer_sizes[i + 1]) * scale
+                b = np.zeros((1, layer_sizes[i + 1]))
             self.weights.append(w)
             self.biases.append(b)
     
@@ -112,27 +119,27 @@ class NeuralNetwork:
             mask_b = np.random.random(self.biases[i].shape) < rate
             noise_b = np.random.randn(*self.biases[i].shape) * strength
             self.biases[i] += mask_b * noise_b
+        
+        # Clip weights to prevent explosion
+        for i in range(self.num_layers - 1):
+            np.clip(self.weights[i], -5.0, 5.0, out=self.weights[i])
+            np.clip(self.biases[i], -5.0, 5.0, out=self.biases[i])
     
     def save(self, filepath: str) -> None:
         """Save network weights to a file."""
         os.makedirs(os.path.dirname(filepath) if os.path.dirname(filepath) else '.', exist_ok=True)
-        np.savez(filepath, *self.weights, *self.biases)
+        data = {}
+        for i in range(self.num_layers - 1):
+            data[f'w{i}'] = self.weights[i]
+            data[f'b{i}'] = self.biases[i]
+        np.savez(filepath, **data)
     
     def load(self, filepath: str) -> None:
         """Load network weights from a file."""
         data = np.load(filepath)
-        arrays = list(data.values())
-        
-        w_idx = 0
-        b_idx = self.num_layers - 1  # biases start after all weights
-        
         for i in range(self.num_layers - 1):
-            self.weights[i] = arrays[w_idx]
-            w_idx += 1
-        
-        for i in range(self.num_layers - 1):
-            self.biases[i] = arrays[b_idx]
-            b_idx += 1
+            self.weights[i] = data[f'w{i}']
+            self.biases[i] = data[f'b{i}']
     
     def get_weight_shape_info(self) -> List[Tuple[Tuple[int, int], Tuple[int, int]]]:
         """Get shapes of all weight matrices and bias vectors."""

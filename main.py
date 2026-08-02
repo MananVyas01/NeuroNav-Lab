@@ -96,8 +96,6 @@ class App:
             print(f"[INFO] Obstacle Mode: {mode}")
         elif key == pygame.K_n:
             self.sim.generate_new_random_layout()
-        elif key == pygame.K_t:
-            self.sim.set_random_target()
         elif key == pygame.K_h:
             self.show_help = not self.show_help
         elif key == pygame.K_g:

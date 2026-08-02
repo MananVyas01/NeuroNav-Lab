@@ -34,7 +34,7 @@ COLOR_SENSOR_RAY = (100, 180, 100, 60)
 COLOR_SELECTED = (255, 150, 50)
 
 # Population
-POPULATION_SIZE = 120
+POPULATION_SIZE = 300
 
 # --- ADAPTIVE GENERATION ---
 BASE_GENERATION_LENGTH = 500
@@ -43,25 +43,30 @@ MID_GENERATION_LENGTH = 650        # gen 11-30: moderate
 LATE_GENERATION_LENGTH = 500       # gen 31+: normal
 EARLY_GEN_THRESHOLD = 10
 MID_GEN_THRESHOLD = 30
+ALLOW_GENERATION_EXTENSION = True
 MAX_EXTENSION_LENGTH = 150         # max extra frames for active rockets
+GENERATION_LENGTH_MAX = 1200       # absolute cap for generation length
 EXTENSION_PROGRESS_THRESHOLD = 5.0 # min distance improvement to qualify
 
 # Evolution
 MUTATION_RATE = 0.3
-MUTATION_STRENGTH = 0.4
+MUTATION_STRENGTH = 0.3
+MUTATION_STRENGTH_MIN = 0.05
+MUTATION_STRENGTH_DECAY = 0.995
 ELITE_PERCENTAGE = 0.05
 CROSSOVER_RATE = 0.5
+ENABLE_CROSSOVER = True
 
-# Neural network - 16 inputs
-INPUT_NEURONS = 16
-HIDDEN1_NEURONS = 20
-HIDDEN2_NEURONS = 16
+# Neural network - 10 inputs
+INPUT_NEURONS = 10
+HIDDEN1_NEURONS = 12
+HIDDEN2_NEURONS = 8
 OUTPUT_NEURONS = 2  # turn, thrust
 
 # Physics
 MAX_SPEED = 5.0
 THRUST_POWER = 0.20
-ROTATION_SPEED = 0.08
+ROTATION_SPEED = 0.15
 FRICTION = 0.98
 MIN_SPEED_THRESHOLD = 0.01
 
@@ -79,8 +84,10 @@ SPEED_REWARD = 1500
 
 # --- REWARD SYSTEM ---
 PROGRESS_WINDOW = 30
-PROGRESS_REWARD_SCALE = 2.0        # was 0.5 - reward progress more
-NO_PROGRESS_PENALTY = -0.1         # was -0.2 - lighter penalty
+PROGRESS_REWARD_SCALE = 5.0        # stronger signal for getting closer to target
+DISTANCE_REWARD_PER_FRAME = 0.3    # per-frame bonus proportional to how close we are vs start
+FORWARD_REWARD_SCALE = 0.5         # reward for velocity component toward target
+SPIN_PENALTY_SCALE = 0.2           # gentle nudge away from spinning, not a death sentence
 
 DANGER_PENALTY_SCALE = 0.8         # was 3.0 - much lighter, don't punish for being near obstacles
 DANGER_APPROACH_PENALTY = 0.3      # was 1.5 - only punish when moving TOWARD obstacle
@@ -96,7 +103,7 @@ RECOVERY_BONUS = 25.0              # was 15.0 - reward getting unstuck
 RECOVERY_COOLDOWN = 40             # was 60
 
 OBSTACLE_CRASH_PENALTY = -100      # was -200 - much lighter
-BOUNDARY_PENALTY = -20             # was -30
+BOUNDARY_PENALTY = -5              # was -20 - light tap, not death sentence
 
 # Obstacle sensors
 SENSOR_RANGE = 200
@@ -167,6 +174,7 @@ DEFAULT_SPEED_INDEX = 0
 # --- PLATEAU DETECTION ---
 PLATEAU_WINDOW = 20               # generations to check
 PLATEAU_MIN_IMPROVEMENT = 10.0    # min absolute fitness improvement to not be plateau
+PLATEAU_MIN_IMPROVEMENT_RATIO = 0.01  # relative: min (improvement / |baseline|) ratio
 
 # --- TREND INDICATOR ---
 TREND_WINDOW = 10                 # generations to compare

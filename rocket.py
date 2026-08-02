@@ -70,6 +70,9 @@ class Rocket:
         self.danger_penalty: float = 0.0
         self.stuck_penalty: float = 0.0
         self.recovery_bonus: float = 0.0
+        self.spin_penalty: float = 0.0
+        self.total_rotation: float = 0.0
+        self._was_at_boundary: bool = False
         
         # Trail
         self.trail: List[Tuple[float, float]] = []
@@ -123,25 +126,18 @@ class Rocket:
         self.danger_penalty = 0.0
         self.stuck_penalty = 0.0
         self.recovery_bonus = 0.0
+        self.spin_penalty = 0.0
+        self.total_rotation = 0.0
+        self._was_at_boundary = False
         self.trail = []
     
     def get_inputs(self, target_x: float, target_y: float,
                    screen_width: int, screen_height: int) -> np.ndarray:
         """Compute normalized inputs for the neural network."""
-        nx = self.x / screen_width
-        ny = self.y / screen_height
-        
-        nvx = self.vx / config.MAX_SPEED if config.MAX_SPEED > 0 else 0
-        nvy = self.vy / config.MAX_SPEED if config.MAX_SPEED > 0 else 0
-        
         dx = target_x - self.x
         dy = target_y - self.y
         dist = math.sqrt(dx * dx + dy * dy)
         max_dist = math.sqrt(screen_width ** 2 + screen_height ** 2)
-        
-        ntx = dx / max_dist
-        nty = dy / max_dist
-        normalized_dist = min(dist / max_dist, 1.0)
         
         angle_to_target = math.atan2(dy, dx)
         angle_diff = angle_to_target - self.rotation
@@ -151,31 +147,44 @@ class Rocket:
             angle_diff += 2 * math.pi
         normalized_angle = angle_diff / math.pi
         
-        normalized_rotation = self.rotation / math.pi
+        # Boundary distances (normalized 0=at wall, 1=far from wall)
+        bnd_left = self.x / screen_width
+        bnd_right = (screen_width - self.x) / screen_width
+        bnd_top = self.y / screen_height
+        bnd_bottom = (screen_height - self.y) / screen_height
         
         inputs = np.array([
-            nx, ny,
-            nvx, nvy,
-            ntx, nty,
-            normalized_dist,
-            normalized_angle,
-            normalized_rotation,
+            normalized_angle,                   # [0] angle to target (key navigation input)
+            min(dist / max_dist, 1.0),          # [1] distance to target
+            self.rotation / math.pi,            # [2] current heading
+            self.vx / config.MAX_SPEED if config.MAX_SPEED > 0 else 0,  # [3]
+            self.vy / config.MAX_SPEED if config.MAX_SPEED > 0 else 0,  # [4]
+            bnd_left,                           # [5] boundary proximity
+            bnd_right,                          # [6]
+            bnd_top,                            # [7]
+            bnd_bottom,                         # [8]
+            self.last_thrust,                   # [9] previous thrust (memory)
         ], dtype=np.float64)
-        
-        inputs = np.concatenate([inputs, np.array(self.sensor_readings, dtype=np.float64)])
-        inputs = np.concatenate([inputs, np.array([self.recent_progress], dtype=np.float64)])
-        inputs = np.concatenate([inputs, np.array([self.obstacle_danger], dtype=np.float64)])
         
         return inputs
     
     def think(self, target_x: float, target_y: float,
               screen_width: int, screen_height: int) -> Tuple[float, float]:
-        """Use neural network to decide action."""
+        """Use neural network to decide action.
+        
+        The neural network is the primary controller. A small baseline
+        ensures basic functionality while the network learns.
+        """
         inputs = self.get_inputs(target_x, target_y, screen_width, screen_height)
         outputs = self.nn.forward(inputs)
         
+        # Network is the primary controller
         turn = float(outputs[0, 0])
         thrust = (float(outputs[0, 1]) + 1.0) / 2.0
+        
+        # Small baseline ensures rockets always have some forward tendency
+        # This prevents dead rockets while letting the network dominate
+        thrust = max(thrust, 0.15)
         
         self.last_turn = turn
         self.last_thrust = thrust
@@ -201,11 +210,14 @@ class Rocket:
         
         turn, thrust = self.think(target_x, target_y, screen_width, screen_height)
         
+        old_rotation = self.rotation
         self.rotation += turn * config.ROTATION_SPEED
         while self.rotation > math.pi:
             self.rotation -= 2 * math.pi
         while self.rotation < -math.pi:
             self.rotation += 2 * math.pi
+        
+        self.total_rotation += abs(self.rotation - old_rotation)
         
         if thrust > 0.15:
             ax = math.cos(self.rotation) * thrust * config.THRUST_POWER
@@ -237,20 +249,31 @@ class Rocket:
         self.last_x = self.x
         self.last_y = self.y
         
-        # Soft boundary
+        # Soft boundary — single boundary penalty per frame regardless of axes
         margin = config.ROCKET_SIZE
-        if self.x < margin:
+        hit_left = self.x < margin
+        hit_right = self.x > screen_width - margin
+        hit_top = self.y < margin
+        hit_bottom = self.y > screen_height - margin
+        boundary_hit = hit_left or hit_right or hit_top or hit_bottom
+        
+        if hit_left:
             self.x = margin
             self.vx = abs(self.vx) * 0.5
-        elif self.x > screen_width - margin:
+        if hit_right:
             self.x = screen_width - margin
             self.vx = -abs(self.vx) * 0.5
-        if self.y < margin:
+        if hit_top:
             self.y = margin
             self.vy = abs(self.vy) * 0.5
-        elif self.y > screen_height - margin:
+        if hit_bottom:
             self.y = screen_height - margin
             self.vy = -abs(self.vy) * 0.5
+        
+        # Penalize only on initial boundary contact (not every frame stuck there)
+        if boundary_hit and not self._was_at_boundary:
+            self.total_reward += config.BOUNDARY_PENALTY
+        self._was_at_boundary = boundary_hit
         
         # Trail
         speed = math.sqrt(self.vx ** 2 + self.vy ** 2)
@@ -333,7 +356,10 @@ class Rocket:
         new_dist = self.distance_history[-1]
         progress = old_dist - new_dist
         
-        self.recent_progress = max(-1.0, min(1.0, progress / config.SENSOR_RANGE))
+        if self.initial_distance > 0:
+            self.recent_progress = max(-1.0, min(1.0, progress / self.initial_distance))
+        else:
+            self.recent_progress = 0.0
     
     def _update_stuck_state(self) -> None:
         """Detect if rocket is stuck based on position and progress."""
@@ -380,11 +406,12 @@ class Rocket:
         self.danger_penalty = 0.0
         self.stuck_penalty = 0.0
         self.recovery_bonus = 0.0
+        self.spin_penalty = 0.0
         
         if self.recent_progress > 0:
             self.progress_reward = self.recent_progress * config.PROGRESS_REWARD_SCALE
         else:
-            self.progress_reward = self.recent_progress * config.NO_PROGRESS_PENALTY
+            self.progress_reward = self.recent_progress * config.PROGRESS_REWARD_SCALE
         
         if self.obstacle_danger > 0:
             base_penalty = self.obstacle_danger * config.DANGER_PENALTY_SCALE
@@ -397,35 +424,57 @@ class Rocket:
                 config.STUCK_MAX_PENALTY
             )
         
-        # Proximity bonus: reward for being closer to target
-        if self.initial_distance > 0:
-            proximity = 1.0 - (self.distance_to_target / self.initial_distance)
-            self.total_reward += proximity * 0.5  # small continuous reward
+        # Spin penalty: only when rotating AND not making progress AND low displacement
+        # Uses rolling window, not lifetime average
+        self.spin_penalty = 0.0
+        if (self.frame_count > 20 
+                and self.recent_progress <= 0
+                and len(self.position_history) >= config.STUCK_WINDOW):
+            old_pos = self.position_history[0]
+            new_pos = self.position_history[-1]
+            displacement = math.sqrt(
+                (new_pos[0] - old_pos[0])**2 + (new_pos[1] - old_pos[1])**2
+            )
+            # Only penalize if: rotating a lot AND barely moving
+            window_rotation = self.total_rotation  # accumulated so far
+            avg_rot_rate = window_rotation / max(1, self.frame_count)
+            if avg_rot_rate > 0.15 and displacement < 30:
+                self.spin_penalty = -(avg_rot_rate - 0.15) * config.SPIN_PENALTY_SCALE
         
-        # Survival bonus: small reward for staying alive each frame
-        self.total_reward += 0.05
+        # Per-frame distance reward REMOVED — conflicts with progress reward.
+        # Progress reward already captures whether we're getting closer.
+        
+        # Forward-movement reward REMOVED — conflicts with progress reward.
+        # Both measure "are we getting closer" at different timescales.
+        # Keeping only progress_reward avoids double-counting.
         
         self.total_reward += self.progress_reward
         self.total_reward += self.danger_penalty
         self.total_reward += self.stuck_penalty
         self.total_reward += self.recovery_bonus
+        self.total_reward += self.spin_penalty
     
     def _point_in_rect(self, px: float, py: float, rect: dict) -> bool:
         """Check if a point is inside a rectangle."""
         return (rect["x"] <= px <= rect["x"] + rect["width"] and
                 rect["y"] <= py <= rect["y"] + rect["height"])
     
-    def calculate_fitness(self) -> float:
-        """Calculate final fitness score."""
+    def calculate_fitness(self, generation_length: int) -> float:
+        """Calculate final fitness score.
+        
+        Args:
+            generation_length: actual episode length used for this generation
+        """
         fitness = self.total_reward
         
-        fitness -= self.frame_count * 0.01  # was 0.02 - lighter time penalty
+        fitness -= self.frame_count * 0.002  # very light time pressure
         
         if self.reached_target and self.frame_reached > 0:
-            speed_ratio = (config.BASE_GENERATION_LENGTH - self.frame_reached) / config.BASE_GENERATION_LENGTH
+            speed_ratio = max(0.0, (generation_length - self.frame_reached) / generation_length)
             speed_bonus = speed_ratio * config.SPEED_REWARD
             fitness += config.TARGET_REWARD + speed_bonus
         
+        self.fitness = fitness
         return fitness
     
     def get_path_efficiency(self) -> float:
