@@ -47,10 +47,10 @@ MAX_EXTENSION_LENGTH = 150         # max extra frames for active rockets
 EXTENSION_PROGRESS_THRESHOLD = 5.0 # min distance improvement to qualify
 
 # Evolution
-MUTATION_RATE = 0.1
-MUTATION_STRENGTH = 0.2
-ELITE_PERCENTAGE = 0.1
-CROSSOVER_RATE = 0.4
+MUTATION_RATE = 0.3
+MUTATION_STRENGTH = 0.4
+ELITE_PERCENTAGE = 0.05
+CROSSOVER_RATE = 0.5
 
 # Neural network - 16 inputs
 INPUT_NEURONS = 16
@@ -95,52 +95,52 @@ STUCK_MAX_PENALTY = 20.0           # was 50.0
 RECOVERY_BONUS = 25.0              # was 15.0 - reward getting unstuck
 RECOVERY_COOLDOWN = 40             # was 60
 
-OBSTACLE_CRASH_PENALTY = -200      # was -300 - less harsh
-BOUNDARY_PENALTY = -30             # was -50
+OBSTACLE_CRASH_PENALTY = -100      # was -200 - much lighter
+BOUNDARY_PENALTY = -20             # was -30
 
 # Obstacle sensors
-SENSOR_RANGE = 120
+SENSOR_RANGE = 200
 SENSOR_ANGLES = [-0.8, -0.4, 0.0, 0.4, 0.8]
 
 # Obstacle modes
 OBSTACLE_MODES = ["OFF", "SIMPLE", "MEDIUM", "HARD", "RANDOM", "MAZE"]
 
-# Obstacle layouts
+# Obstacle layouts (huge gaps, thin walls for easy learning)
 SIMPLE_OBSTACLES = [
-    {"x": 320, "y": 0, "width": 18, "height": 280},
-    {"x": 320, "y": 380, "width": 18, "height": 320},
+    {"x": 350, "y": 0, "width": 10, "height": 150},
+    {"x": 350, "y": 450, "width": 10, "height": 250},
 ]
 
 MEDIUM_OBSTACLES = [
-    {"x": 260, "y": 0, "width": 18, "height": 200},
-    {"x": 260, "y": 280, "width": 18, "height": 220},
-    {"x": 260, "y": 580, "width": 18, "height": 120},
-    {"x": 460, "y": 150, "width": 18, "height": 250},
-    {"x": 620, "y": 0, "width": 18, "height": 350},
+    {"x": 280, "y": 0, "width": 10, "height": 150},
+    {"x": 280, "y": 350, "width": 10, "height": 150},
+    {"x": 280, "y": 620, "width": 10, "height": 80},
+    {"x": 480, "y": 100, "width": 10, "height": 180},
+    {"x": 620, "y": 0, "width": 10, "height": 250},
 ]
 
 HARD_OBSTACLES = [
-    {"x": 200, "y": 0, "width": 18, "height": 180},
-    {"x": 200, "y": 250, "width": 18, "height": 150},
-    {"x": 200, "y": 470, "width": 18, "height": 230},
-    {"x": 380, "y": 100, "width": 18, "height": 200},
-    {"x": 380, "y": 380, "width": 18, "height": 320},
-    {"x": 530, "y": 0, "width": 18, "height": 280},
-    {"x": 530, "y": 350, "width": 18, "height": 150},
-    {"x": 530, "y": 570, "width": 18, "height": 130},
-    {"x": 680, "y": 150, "width": 18, "height": 250},
+    {"x": 220, "y": 0, "width": 10, "height": 120},
+    {"x": 220, "y": 320, "width": 10, "height": 100},
+    {"x": 220, "y": 550, "width": 10, "height": 150},
+    {"x": 400, "y": 80, "width": 10, "height": 150},
+    {"x": 400, "y": 430, "width": 10, "height": 270},
+    {"x": 550, "y": 0, "width": 10, "height": 180},
+    {"x": 550, "y": 400, "width": 10, "height": 100},
+    {"x": 550, "y": 620, "width": 10, "height": 80},
+    {"x": 680, "y": 80, "width": 10, "height": 180},
 ]
 
 MAZE_OBSTACLES = [
-    {"x": 150, "y": 0, "width": 18, "height": 250},
-    {"x": 150, "y": 320, "width": 18, "height": 380},
-    {"x": 300, "y": 100, "width": 18, "height": 250},
-    {"x": 300, "y": 420, "width": 18, "height": 280},
-    {"x": 450, "y": 0, "width": 18, "height": 200},
-    {"x": 450, "y": 270, "width": 18, "height": 180},
-    {"x": 450, "y": 520, "width": 18, "height": 180},
-    {"x": 600, "y": 80, "width": 18, "height": 300},
-    {"x": 600, "y": 450, "width": 18, "height": 250},
+    {"x": 150, "y": 0, "width": 10, "height": 180},
+    {"x": 150, "y": 380, "width": 10, "height": 320},
+    {"x": 300, "y": 60, "width": 10, "height": 180},
+    {"x": 300, "y": 480, "width": 10, "height": 220},
+    {"x": 450, "y": 0, "width": 10, "height": 120},
+    {"x": 450, "y": 330, "width": 10, "height": 120},
+    {"x": 450, "y": 600, "width": 10, "height": 100},
+    {"x": 600, "y": 30, "width": 10, "height": 220},
+    {"x": 600, "y": 500, "width": 10, "height": 200},
 ]
 
 # Random obstacle generation

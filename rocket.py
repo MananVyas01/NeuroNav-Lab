@@ -284,9 +284,15 @@ class Rocket:
             for obs in obstacles:
                 if self._point_in_rect(self.x, self.y, obs):
                     self.crashed = True
-                    self.alive = False
                     self.total_reward += config.OBSTACLE_CRASH_PENALTY
-                    return
+                    # Push rocket out of obstacle instead of killing it
+                    if self.vx > 0:
+                        self.x = obs["x"] - config.ROCKET_SIZE
+                    else:
+                        self.x = obs["x"] + obs["width"] + config.ROCKET_SIZE
+                    self.vx = -self.vx * 0.5
+                    self.vy = -self.vy * 0.5
+                    break
     
     def _update_danger_and_approach(self, target_x: float, target_y: float) -> None:
         """Calculate obstacle danger and approach velocity from sensors."""
