@@ -79,24 +79,24 @@ SPEED_REWARD = 1500
 
 # --- REWARD SYSTEM ---
 PROGRESS_WINDOW = 30
-PROGRESS_REWARD_SCALE = 0.5
-NO_PROGRESS_PENALTY = -0.2
+PROGRESS_REWARD_SCALE = 2.0        # was 0.5 - reward progress more
+NO_PROGRESS_PENALTY = -0.1         # was -0.2 - lighter penalty
 
-DANGER_PENALTY_SCALE = 3.0
-DANGER_APPROACH_PENALTY = 1.5
+DANGER_PENALTY_SCALE = 0.8         # was 3.0 - much lighter, don't punish for being near obstacles
+DANGER_APPROACH_PENALTY = 0.3      # was 1.5 - only punish when moving TOWARD obstacle
 
 STUCK_DISPLACEMENT_THRESHOLD = 2.0
 STUCK_PROGRESS_THRESHOLD = 0.5
 STUCK_SENSOR_THRESHOLD = 0.3
 STUCK_WINDOW = 40
-STUCK_PENALTY_PER_FRAME = 0.3
-STUCK_MAX_PENALTY = 50.0
+STUCK_PENALTY_PER_FRAME = 0.1      # was 0.3 - lighter
+STUCK_MAX_PENALTY = 20.0           # was 50.0
 
-RECOVERY_BONUS = 15.0
-RECOVERY_COOLDOWN = 60
+RECOVERY_BONUS = 25.0              # was 15.0 - reward getting unstuck
+RECOVERY_COOLDOWN = 40             # was 60
 
-OBSTACLE_CRASH_PENALTY = -300
-BOUNDARY_PENALTY = -50
+OBSTACLE_CRASH_PENALTY = -200      # was -300 - less harsh
+BOUNDARY_PENALTY = -30             # was -50
 
 # Obstacle sensors
 SENSOR_RANGE = 120

@@ -408,7 +408,6 @@ class Rocket:
         """Check if a point is inside a rectangle."""
         return (rect["x"] <= px <= rect["x"] + rect["width"] and
                 rect["y"] <= py <= rect["y"] + rect["height"])
-    
     def calculate_fitness(self) -> float:
         """Calculate final fitness score."""
         fitness = self.total_reward
